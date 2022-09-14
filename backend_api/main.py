@@ -128,7 +128,7 @@ class Text(Resource):
     # Temporary trial version
     @api.route("/api/text/v2")
     @api.expect(parser)
-    def postv2(self):
+    def post(self):
         datastore_client = datastore.Client()
 
         args = parser.parse_args()
