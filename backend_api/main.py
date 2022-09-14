@@ -47,6 +47,7 @@ api = Api(app)
 
 parser = api.parser()
 parser.add_argument("text", type=str, help="Text", location="form")
+parser.add_argument("urls", type=str, help="urls", location="form")
 
 
 @api.route("/api/text")
@@ -124,6 +125,17 @@ class Text(Resource):
         }
         return result
 
+    # Temporary trial version
+    @api.route("/api/text/v2")
+    @api.expect(parser)
+    def post(self):
+        datastore_client = datastore.Client()
+
+        args = parser.parse_args()
+        text = args["text"]
+        urls = args["urls"]
+        if urls:
+            return "This is /api/text/v2 and you have entered below urls: " + urls
 
 @app.errorhandler(500)
 def server_error(e):
