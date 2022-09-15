@@ -56,7 +56,7 @@ parser.add_argument("urls", type=str, help="urls", location="form")
 class Text(Resource):
     def get(self):
         """
-        This GET request will return all the texts and sentiments that have been POSTed previously.
+        This GET request will return all the texts,sentiments, entities and topics that have been POSTed previously.
         """
         # Create a Cloud Datastore client.
         datastore_client = datastore.Client()
