@@ -5,6 +5,8 @@ from flask_restx import Resource, Api
 from google.cloud import datastore
 from google.cloud import language_v1 as language
 import os
+import requests
+from bs4 import BeautifulSoup
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
 
@@ -129,13 +131,71 @@ class Text(Resource):
     # Temporary trial version
     @api.expect(parser)
     def put(self):
-        datastore_client = datastore.Client()
-
         args = parser.parse_args()
         text = args["text"]
         urls = args["urls"]
-        if urls:
-            return "This is /api/text/v2 and you have entered below urls: " + urls
+        urls = urls.split(',')
+        for url in urls:
+            print("Processing : " + url)
+            text = scrapeDataFromUrl(url)
+            analyseSentimentAndPersistToDataStore(text)
+
+def scrapeDataFromUrl(url):
+    print("Scraping : " + url)
+    req = requests.get(url)
+    soup = BeautifulSoup(req.text,"html.parser")
+    text_elements = soup.find_all("div",{'class':'rich-text'})
+    result = text_elements[0].text
+    print('Scraped text = ' + result)
+    return result
+
+def analyseSentimentAndPersistToDataStore(text):
+    datastore_client = datastore.Client()
+
+    # Get the sentiment score of the first sentence of the analysis (that's the [0] part)
+    # the text can have multiple lines and NLP API result will be a list, an item for each of the line in the text
+    sentiment_result = analyze_text_sentiment(text)  # this is a list
+    print("Sentiment result from GCP NLP API = ", sentiment_result, sep = ',')
+    for sentimentRecord in sentiment_result:
+        sentiment = sentimentRecord.get("sentiment score")
+
+        # Assign a label based on the score
+        overall_sentiment = "unknown"
+        if sentiment > 0:
+            overall_sentiment = "positive"
+        if sentiment < 0:
+            overall_sentiment = "negative"
+        if sentiment == 0:
+            overall_sentiment = "neutral"
+
+        current_datetime = datetime.now()
+
+        # The kind for the new entity. This is so all 'Sentences' can be queried.
+        kind = "Sentences"
+
+        # Create a key to store into datastore
+        key = datastore_client.key(kind)
+        # If a key id is not specified then datastore will automatically generate one. For example, if we had:
+        # key = datastore_client.key(kind, 'sample_task')
+        # instead of the above, then 'sample_task' would be the key id used.
+
+        # Construct the new entity using the key. Set dictionary values for entity
+        entity = datastore.Entity(key)
+        entity["text"] = text
+        entity["timestamp"] = current_datetime
+        entity["sentiment"] = overall_sentiment
+
+        # Save the new entity to Datastore.
+        datastore_client.put(entity)
+
+#             result = {}
+#             result[str(entity.key.id)] = {
+#                 "text": text,
+#                 "timestamp": str(current_datetime),
+#                 "sentiment": overall_sentiment,
+#             }
+#             return result
+
 
 @app.errorhandler(500)
 def server_error(e):
