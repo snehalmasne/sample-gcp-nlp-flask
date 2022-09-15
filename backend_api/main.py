@@ -61,7 +61,7 @@ class Text(Resource):
         # Create a Cloud Datastore client.
         datastore_client = datastore.Client()
 
-        # Get the datastore 'kind' which are 'Sentences'
+        # Get the datastore 'kind' which are 'Sentences', 'Entities' & 'Topics'
         query = datastore_client.query(kind="Sentences")
         query = datastore_client.query(kind="Entities")
         query = datastore_client.query(kind="Topics")
