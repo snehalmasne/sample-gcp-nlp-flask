@@ -70,8 +70,6 @@ class Text(Resource):
 
         # Get the datastore 'kind' which are 'Sentences', 'Entities' & 'Topics'
         query = datastore_client.query(kind="Sentences")
-       # query = datastore_client.query(kind="Entities")
-        #query = datastore_client.query(kind="Topics")
         text_entities = list(query.fetch())
 
         # Parse the data into a dictionary format
@@ -81,9 +79,23 @@ class Text(Resource):
                 "text": str(text_entity["text"]),
                 "timestamp": str(text_entity["timestamp"]),
                 "sentiment": str(text_entity["sentiment"]),
-                #"Entity": str(text_entity["entity"]),
-                #"Topics": str(text_entity["Topics"])
             }
+          
+        return result
+          
+        query = datastore_client.query(kind="Entities")
+        salience_entities = list(query.fetch())
+
+        # Parse the data into a dictionary format
+        result = {}
+        for salience_entity in salience_entities:
+            result[str(salience_entity.id)] = {
+                "float": float(salience_entity["salience"]),
+                "timestamp": str(text_entity["name"]),
+                "sentiment": str(text_entity["type"]),
+            }
+          
+          
 
         return result
 
