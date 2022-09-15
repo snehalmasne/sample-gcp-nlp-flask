@@ -89,7 +89,7 @@ class Text(Resource):
         # Parse the data into a dictionary format
         result = {}
         for salience_entity in salience_entities:
-            result[str(salience_entity.id)] = {
+            result[float(salience_entity.id)] = {
                 "salience": float(salience_entity["salience"]),
                 "timestamp": str(text_entity["name"]),
                 "sentiment": str(text_entity["type"]),
