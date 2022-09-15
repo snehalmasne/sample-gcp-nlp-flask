@@ -63,6 +63,8 @@ class Text(Resource):
 
         # Get the datastore 'kind' which are 'Sentences'
         query = datastore_client.query(kind="Sentences")
+        query = datastore_client.query(kind="Entities")
+        query = datastore_client.query(kind="Topics")
         text_entities = list(query.fetch())
 
         # Parse the data into a dictionary format
