@@ -10,6 +10,13 @@ from bs4 import BeautifulSoup
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
 
+# ########### MAKE SURE YOU HAVE RUN BELOW CODE BEFORE INVOKING main.py #######
+#  pip install -r requirements.txt
+#  pip install virtualenv
+#  virtualenv -p python3 env
+#  source env/bin/activate
+######################################################
+
 """
 This Flask app shows some examples of the types of requests you could build.
 There is currently a GET request that will return all the data in GCP Datastore.
@@ -93,7 +100,7 @@ class Text(Resource):
             print("Processing : " + url)
             text = scrapeDataFromUrl(url)
             analyseSentimentAndPersistToDataStore(text)
-            #analyseEntitiesAndPersistToDataStore(text)
+            analyseEntitiesAndPersistToDataStore(text)
 
 def scrapeDataFromUrl(url):
     print("Scraping : " + url)
@@ -109,25 +116,25 @@ def analyseEntitiesAndPersistToDataStore(text):
     entities_result = analyze_entities(text)  # this is a list
     print("Entities result from GCP NLP API = ", entities_result, sep = ',')
 
-    # The kind for the new entity. This is so all 'Sentences' can be queried.
-    kind = "Entities"
-
     for entity_result in entities_result:
+        # The kind for the new entity. This is so all 'Sentences' can be queried.
+        kind = "Entities"
+
         # Create a key to store into datastore
         key = datastore_client.key(kind)
-        # If a key id is not specified then datastore will automatically generate one. For example, if we had:
-        # key = datastore_client.key(kind, 'sample_task')
-        # instead of the above, then 'sample_task' would be the key id used.
 
         # Construct the new entity using the key. Set dictionary values for entity
         entity = datastore.Entity(key)
-        entity["text"] = entity_result["text"]
-        entity["name"] = entity_result["name"]
+
+        name_str = entity_result["name"]
+        print("name_str = " + name_str)
+
+        entity["name"] = name_str
         entity["type"] = entity_result["type"]
+        entity["salience"] = entity_result["salience"]
 
         # Save the new entity to Datastore.
         datastore_client.put(entity)
-
 
 
 def analyseSentimentAndPersistToDataStore(text):
@@ -208,6 +215,7 @@ def analyze_entities(text):
         result_record["text"] = text
         result_record["name"] = entity_result.name
         result_record["type"] = entity_result.type_
+        result_record["salience"] = entity_result.salience
         final_result.append(result_record)
 
     return final_result
