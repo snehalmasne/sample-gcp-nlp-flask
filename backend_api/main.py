@@ -125,6 +125,18 @@ class Text(Resource):
         }
         return result
 
+
+    # Temporary trial version
+    @api.expect(parser)
+    def put(self):
+        datastore_client = datastore.Client()
+
+        args = parser.parse_args()
+        text = args["text"]
+        urls = args["urls"]
+        if urls:
+            return "This is /api/text/v2 and you have entered below urls: " + urls
+
 @app.errorhandler(500)
 def server_error(e):
     logging.exception("An error occurred during a request.")
