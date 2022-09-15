@@ -90,7 +90,7 @@ class Text(Resource):
         result = {}
         for salience_entity in salience_entities:
             result[str(salience_entity.id)] = {
-                "float": float(salience_entity["salience"]),
+                "salience": float(salience_entity["salience"]),
                 "timestamp": str(text_entity["name"]),
                 "sentiment": str(text_entity["type"]),
             }
