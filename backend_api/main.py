@@ -74,6 +74,8 @@ class Text(Resource):
                 "text": str(text_entity["text"]),
                 "timestamp": str(text_entity["timestamp"]),
                 "sentiment": str(text_entity["sentiment"]),
+                "Entity": str(text_entity["entity"]),
+                "Topics": str(text_topics["Topics"])
             }
 
         return result
