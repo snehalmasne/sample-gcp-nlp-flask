@@ -5,8 +5,17 @@ from flask_restx import Resource, Api
 from google.cloud import datastore
 from google.cloud import language_v1 as language
 import os
+import requests
+from bs4 import BeautifulSoup
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
+
+# ########### MAKE SURE YOU HAVE RUN BELOW CODE BEFORE INVOKING main.py #######
+#  pip install -r requirements.txt
+#  pip install virtualenv
+#  virtualenv -p python3 env
+#  source env/bin/activate
+######################################################
 
 """
 This Flask app shows some examples of the types of requests you could build.
@@ -47,18 +56,19 @@ api = Api(app)
 
 parser = api.parser()
 parser.add_argument("text", type=str, help="Text", location="form")
+parser.add_argument("urls", type=str, help="urls", location="form")
 
 
 @api.route("/api/text")
 class Text(Resource):
     def get(self):
         """
-        This GET request will return all the texts and sentiments that have been POSTed previously.
+        This GET request will return all the texts,sentiments, entities and topics that have been POSTed previously.
         """
         # Create a Cloud Datastore client.
         datastore_client = datastore.Client()
 
-        # Get the datastore 'kind' which are 'Sentences'
+        # Get the datastore 'kind' which are 'Sentences', 'Entities' & 'Topics'
         query = datastore_client.query(kind="Sentences")
         text_entities = list(query.fetch())
 
@@ -70,22 +80,85 @@ class Text(Resource):
                 "timestamp": str(text_entity["timestamp"]),
                 "sentiment": str(text_entity["sentiment"]),
             }
+          
+        return result
+          
+        query = datastore_client.query(kind="Entities")
+        salience_entities = list(query.fetch())
+
+        # Parse the data into a dictionary format
+        result = {}
+        for salience_entity in salience_entities:
+            result[float(salience_entity.id)] = {
+                "salience": float(salience_entity["salience"]),
+                "timestamp": str(text_entity["name"]),
+                "sentiment": str(text_entity["type"]),
+            }
+          
+          
 
         return result
 
     @api.expect(parser)
     def post(self):
         """
-        This POST request will accept a 'text', analyze the sentiment analysis of the first sentence, store
-        the result to datastore as a 'Sentence', and also return the result.
+        This POST request can be used in two ways. Either provide the text to be analysed or provide comma separated list of URL to fetch the data from. The url takes precedence over text.
         """
-        datastore_client = datastore.Client()
-
         args = parser.parse_args()
         text = args["text"]
+        urls = args["urls"]
+        urls = urls.split(',')
+        for url in urls:
+            print("Processing : " + url)
+            text = scrapeDataFromUrl(url)
+            analyseSentimentAndPersistToDataStore(text)
+            analyseEntitiesAndPersistToDataStore(text)
 
-        # Get the sentiment score of the first sentence of the analysis (that's the [0] part)
-        sentiment = analyze_text_sentiment(text)[0].get("sentiment score")
+def scrapeDataFromUrl(url):
+    print("Scraping : " + url)
+    req = requests.get(url)
+    soup = BeautifulSoup(req.text,"html.parser")
+    text_elements = soup.find_all("div",{'class':'rich-text'})
+    result = text_elements[0].text
+    print('Scraped text = ' + result)
+    return result
+
+def analyseEntitiesAndPersistToDataStore(text):
+    datastore_client = datastore.Client()
+    entities_result = analyze_entities(text)  # this is a list
+    print("Entities result from GCP NLP API = ", entities_result, sep = ',')
+
+    for entity_result in entities_result:
+        # The kind for the new entity. This is so all 'Sentences' can be queried.
+        kind = "Entities"
+
+        # Create a key to store into datastore
+        key = datastore_client.key(kind)
+
+        # Construct the new entity using the key. Set dictionary values for entity
+        entity = datastore.Entity(key)
+
+        name_str = entity_result["name"]
+        print("name_str = " + name_str)
+
+        entity["name"] = name_str
+        entity["type"] = entity_result["type"]
+        entity["salience"] = entity_result["salience"]
+
+        # Save the new entity to Datastore.
+        datastore_client.put(entity)
+
+
+def analyseSentimentAndPersistToDataStore(text):
+    datastore_client = datastore.Client()
+
+    # Get the sentiment score of the first sentence of the analysis (that's the [0] part)
+    # the text can have multiple lines and NLP API result will be a list, an item for each of the line in the text
+    sentiment_result = analyze_text_sentiment(text)  # this is a list
+    print("Sentiment result from GCP NLP API = ", sentiment_result, sep = ',')
+    for sentimentRecord in sentiment_result:
+        sentiment = sentimentRecord.get("sentiment score")
+        sentiment_text = sentimentRecord.get("text")
 
         # Assign a label based on the score
         overall_sentiment = "unknown"
@@ -109,20 +182,20 @@ class Text(Resource):
 
         # Construct the new entity using the key. Set dictionary values for entity
         entity = datastore.Entity(key)
-        entity["text"] = text
+        entity["text"] = sentiment_text
         entity["timestamp"] = current_datetime
         entity["sentiment"] = overall_sentiment
 
         # Save the new entity to Datastore.
         datastore_client.put(entity)
 
-        result = {}
-        result[str(entity.key.id)] = {
-            "text": text,
-            "timestamp": str(current_datetime),
-            "sentiment": overall_sentiment,
-        }
-        return result
+#             result = {}
+#             result[str(entity.key.id)] = {
+#                 "text": text,
+#                 "timestamp": str(current_datetime),
+#                 "sentiment": overall_sentiment,
+#             }
+#             return result
 
 
 @app.errorhandler(500)
@@ -137,6 +210,28 @@ def server_error(e):
         ),
         500,
     )
+
+def analyze_entities(text):
+    """
+    This is modified from the Google NLP API documentation found here:
+    https://cloud.google.com/natural-language/docs/analyzing-sentiment
+    It makes a call to the Google NLP API to retrieve sentiment analysis.
+    """
+    client = language.LanguageServiceClient()
+    document = language.Document(content=text, type_=language.Document.Type.PLAIN_TEXT)
+    response = client.analyze_entities(document=document)
+
+    final_result = []
+    for entity_result in response.entities:
+        result_record = {}
+        result_record["text"] = text
+        result_record["name"] = entity_result.name
+        result_record["type"] = entity_result.type_
+        result_record["salience"] = entity_result.salience
+        final_result.append(result_record)
+
+    return final_result
+
 
 
 def analyze_text_sentiment(text):
